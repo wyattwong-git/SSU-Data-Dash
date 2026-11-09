@@ -1,9 +1,9 @@
 # Data and everything the scripts write
 data/
 outputs/
-reports/
-figures/
-submissions/
+
+# figures/ and reports/ are committed so the README can show them
+# submissions/ is committed: the two CSVs are part of the hand-in
 
 # Python and notebook clutter
 __pycache__/

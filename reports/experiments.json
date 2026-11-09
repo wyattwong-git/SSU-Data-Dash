@@ -1,0 +1,88 @@
+{
+  "Draft design (training comps aged 0-120 days)": {
+    "off_market": {
+      "mdape": 7.35,
+      "mape": 10.0,
+      "median_signed_error": 2.4
+    },
+    "list_aware": {
+      "mdape": 4.24,
+      "mape": 5.28,
+      "median_signed_error": 1.9
+    }
+  },
+  "No seasonal term in the forecast": {
+    "off_market": {
+      "mdape": 8.43,
+      "mape": 11.39,
+      "median_signed_error": 5.74
+    },
+    "list_aware": {
+      "mdape": 4.48,
+      "mape": 5.58,
+      "median_signed_error": 2.67
+    }
+  },
+  "Half of the recent trend added to the forecast": {
+    "off_market": {
+      "mdape": 7.47,
+      "mape": 10.0,
+      "median_signed_error": 1.39
+    },
+    "list_aware": {
+      "mdape": 4.21,
+      "mape": 5.26,
+      "median_signed_error": 1.55
+    }
+  },
+  "FINAL design: draft with training comps not aged": {
+    "off_market": {
+      "mdape": 7.29,
+      "mape": 9.96,
+      "median_signed_error": 2.4
+    },
+    "list_aware": {
+      "mdape": 4.17,
+      "mape": 5.25,
+      "median_signed_error": 1.71
+    }
+  },
+  "No remark flags": {
+    "off_market": {
+      "mdape": 8.21,
+      "mape": 11.11,
+      "median_signed_error": 2.54
+    },
+    "list_aware": {
+      "mdape": 4.39,
+      "mape": 5.44,
+      "median_signed_error": 1.73
+    }
+  },
+  "Squared-error loss": {
+    "off_market": {
+      "mdape": 7.24,
+      "mape": 9.88,
+      "median_signed_error": 2.4
+    },
+    "list_aware": {
+      "mdape": 4.36,
+      "mape": 5.53,
+      "median_signed_error": 2.25
+    }
+  },
+  "Control: one model, date as a feature, no comps (off-market)": {
+    "off_market": {
+      "mdape": 9.86,
+      "mape": 12.9,
+      "median_signed_error": 5.74
+    }
+  },
+  "Warning: same control scored on a RANDOM 20% split (off-market)": {
+    "off_market": {
+      "mdape": 8.19,
+      "mape": 10.65,
+      "median_signed_error": 0.06
+    }
+  }
+}
