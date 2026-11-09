@@ -1,48 +1,42 @@
-"""Features: turn a table of homes into numbers a model can learn from.
+"""Chapter 1 of the story: describing a home in numbers.
 
-The idea in one line: price every home in *today's dollars*, from what similar homes
-nearby sold for, then let a gradient-boosted model learn the rest.
+Everything here comes from one row of a test file: only what is known before the sale.
+Three columns of `listings` are deliberately never used:
 
-`FeatureBuilder.fit(train)` learns everything it needs from past sales only:
+- external_avm_estimate(_date): about 70% of these estimates are dated AFTER the sale, and
+  the test files do not have the column. A model trained on it would learn from the future.
+- days_on_market and date_sold: only known once the home has sold.
+- list_price: never in the off-market features (rule of the case).
 
-1. A **market index** per property type and month (the 2021-22 boom, the 2023-24
-   correction). Every past sale is converted to "index-adjusted" log price, so a 2022
-   sale and a 2026 sale can be compared.
-2. **Neighbourhood price levels**: the adjusted log price per square foot of each
-   community (and community x type), shrunk towards the type average when the
-   community has few sales. Training rows get *out-of-fold* values, so a home never
-   sees its own price.
-3. **Comparable sales**: the 10 nearest past sales of the same type (by latitude and
-   longitude), their adjusted price and price per square foot. Training rows skip
-   themselves.
-
-`transform(homes)` only uses the columns of a test file (never sold_price, date_sold
-or the third-party estimate), so the same code runs in validation and on the test.
+Comparable sales live in market.py, because those need the history of sales as well.
 """
 import numpy as np
 import pandas as pd
-from sklearn.model_selection import KFold
-from sklearn.neighbors import KDTree
 
 PROPERTY_TYPES = ["Condo Apt", "Detached", "Semi-Detached", "Condo Townhouse",
                   "Freehold Townhouse", "Co-Op Apt"]
-CATEGORICAL = ["house_type_name", "house_style", "municipality", "community"]
 
-# Words in the listing remarks that move prices up or down.
-KEYWORDS = {
-    "kw_renovated": r"renovat|updated|remodel|brand new|new kitchen|upgraded|modern",
-    "kw_needs_work": r"needs work|tlc|fixer|handyman|as[- ]is|investor|potential|bring your",
-    "kw_luxury": r"luxur|custom|high[- ]end|designer|stunning|executive|chef",
-    "kw_view": r"view|lake|ravine|skyline|waterfront|park",
-    "kw_pool": r"pool",
-    "kw_basement": r"basement|in-law|legal suite|separate entrance|income",
-    "kw_transit": r"subway|ttc|transit|go station|lrt",
-    "kw_corner": r"corner",
-    "kw_penthouse": r"penthouse|ph\b",
+# Columns the tree model should treat as labels rather than numbers.
+CATEGORICAL = ["community", "house_type_name", "house_style", "municipality"]
+
+# What the listing description says about condition. These groups were written by reading
+# the remarks and checking which phrases go with a price above or below similar homes,
+# on sales before June 2025 only. Phrases are grouped because no single phrase moved
+# prices by more than about 2%, whereas the condition they describe does matter.
+REMARK_FLAGS = {
+    "renovated": r"fully (?:renovated|redone|updated)|renovated|turnkey|turn-key|gut|brand[- ]new|newly|top to bottom",
+    "updated": r"updated|refreshed|refinished|new (?:kitchen|bathroom|flooring|furnace|roof|windows|central air)|newer",
+    "original": r"original|dated|as[- ]is|personal touch|your vision|canvas|bring your|renovation ideas",
+    "needs_work": r"needs? (?:work|attention|replacing|updating|tlc)|need replacing|fixer|handyman|worn|as[- ]is|invest in its potential",
+    "high_end": r"quartz|stone counters|granite|frameless|spa-like|wide[- ]plank|smooth ceilings|built-in appliances|custom|stainless",
+    "views": r"unobstructed|skyline|lake view|panoramic|floor-to-ceiling|ravine",
+    "basement": r"finished basement|in-law|separate entrance|walk-?out",
+    "outdoors": r"pool|deep lot|private backyard|south-facing|deck|patio|terrace|balcony",
+    "amenities": r"concierge|gym|party room|locker|underground parking",
+    "first_time_or_investor": r"first[- ]time|investor|starter|couple starting|start(?:ing)? out",
+    "family_or_downsizer": r"growing family|downsizer|kids|room to grow",
+    "commuter": r"commuter|transit|subway|highway",
 }
-
-K_COMPS = 10
-SHRINK = 20          # how many sales a community needs before we trust its own average
 
 
 def square_feet(house_area):
@@ -54,197 +48,77 @@ def square_feet(house_area):
     return (low + high) / 2
 
 
-def month_number(dates):
-    """Whole months since January 2021."""
-    return (dates.dt.year - 2021) * 12 + dates.dt.month - 1
+class CategoryEncoder:
+    """Turn labels into integers using the training sales only. Labels first seen later
+    become missing rather than an error (or a peek at the test file)."""
 
-
-def xy(homes):
-    """Coordinates in comparable units (a degree of longitude is 0.72 of a degree of latitude here)."""
-    return np.column_stack([homes["latitude"].to_numpy(float), homes["longitude"].to_numpy(float) * 0.72])
-
-
-class FeatureBuilder:
-    def __init__(self, use_list_price=False):
-        self.use_list_price = use_list_price
-
-    # ------------------------------------------------------------------ fit
     def fit(self, train):
-        train = train.reset_index(drop=True)
-        log_price = np.log(train["sold_price"].to_numpy(float))
-        sqft = square_feet(train["house_area"]).to_numpy(float)
-        kind = train["house_type_name"].to_numpy()
-        sold_month = month_number(train["date_sold"]).to_numpy()
-        self.last_month = int(sold_month.max())
-
-        # 1. Market index per type and month, from residuals after removing location.
-        #    Two passes: location level -> monthly index -> location level again.
-        index_value = np.zeros(len(train))
-        for _ in range(2):
-            adjusted = log_price - index_value
-            group = train["community"].astype(str) + "|" + train["house_type_name"]
-            level = pd.Series(adjusted).groupby(group.values).transform("mean").to_numpy()
-            residual = log_price - level
-            self.index = {}
-            for t in np.unique(kind):
-                mask = kind == t
-                monthly = pd.Series(residual[mask]).groupby(sold_month[mask]).median()
-                full = monthly.reindex(range(0, self.last_month + 1)).interpolate().bfill().ffill()
-                smooth = full.rolling(3, min_periods=1, center=True).mean()
-                # The last month only has past neighbours: use a trailing mean there.
-                smooth.iloc[-1] = full.iloc[-2:].mean()
-                self.index[t] = smooth - smooth.iloc[-1]     # 0 = price level of the last month
-            index_value = self.index_at(kind, sold_month)
-
-        adj = log_price - index_value                          # log price in last-month dollars
-        adj_ppsf = adj - np.log(sqft)
-        self.adj = adj
-
-        # 2. Neighbourhood levels (out-of-fold for the training rows).
-        self.type_mean = pd.Series(adj_ppsf).groupby(kind).median().to_dict()
-        self.type_mean_price = pd.Series(adj).groupby(kind).median().to_dict()
-        self.encoders = {}
-        frame = pd.DataFrame({"community": train["community"].astype(str).values, "type": kind,
-                              "adj_ppsf": adj_ppsf, "adj": adj})
-        self.train_levels = pd.DataFrame(index=frame.index, columns=["comm_ppsf", "comm_type_ppsf", "comm_type_price"],
-                                         dtype=float)
-        for train_idx, hold_idx in KFold(5, shuffle=True, random_state=0).split(frame):
-            tables = self._level_tables(frame.iloc[train_idx])
-            self.train_levels.iloc[hold_idx] = self._apply_levels(frame.iloc[hold_idx], tables).values
-        self.tables = self._level_tables(frame)
-
-        # 3. Comparable sales: one KD-tree per property type.
-        self.trees = {}
-        for t in np.unique(kind):
-            idx = np.where(kind == t)[0]
-            self.trees[t] = (KDTree(xy(train.iloc[idx])), idx)
-        self.comp_adj, self.comp_ppsf = adj, adj_ppsf
-        self.train_comps = self._comps(train, exclude_self=True)
-
-        # Category codes, learned from the training sales.
-        # Columns with too many values for the tree model's categories are left out
-        # (the neighbourhood levels above already carry their information).
-        self.codes = {}
-        for c in CATEGORICAL:
-            values = sorted(train[c].astype(str).unique())
-            if len(values) <= 250:
-                self.codes[c] = {v: i for i, v in enumerate(values)}
-        self._train_ref = train["ml_num"].to_numpy()
+        self.codes = {column: {label: i for i, label in enumerate(sorted(train[column].astype(str).unique()))}
+                      for column in CATEGORICAL}
         return self
 
-    def index_at(self, kind, month):
-        """Market index (log scale, 0 = last training month) for each home."""
-        month = np.clip(np.asarray(month), 0, self.last_month)
-        out = np.zeros(len(month))
-        for t, series in self.index.items():
-            mask = np.asarray(kind) == t
-            out[mask] = series.to_numpy()[month[mask]]
-        return out
+    def transform(self, homes):
+        return {column: homes[column].astype(str).map(self.codes[column]).astype(float)
+                for column in CATEGORICAL}
 
-    def _level_tables(self, frame):
-        comm = frame.groupby("community")["adj_ppsf"].agg(["mean", "count"])
-        comm_type = frame.groupby(["community", "type"])[["adj_ppsf", "adj"]].agg(["mean", "count"])
-        type_ppsf = frame.groupby("type")["adj_ppsf"].mean()
-        type_adj = frame.groupby("type")["adj"].mean()
-        return comm, comm_type, type_ppsf, type_adj
 
-    def _apply_levels(self, frame, tables):
-        comm, comm_type, type_ppsf, type_adj = tables
-        prior_ppsf = frame["type"].map(type_ppsf).fillna(type_ppsf.mean()).to_numpy()
-        prior_adj = frame["type"].map(type_adj).fillna(type_adj.mean()).to_numpy()
-        c = comm.reindex(frame["community"].values)
-        n = c["count"].fillna(0).to_numpy()
-        comm_ppsf = (c["mean"].fillna(0).to_numpy() * n + prior_ppsf * SHRINK) / (n + SHRINK)
-        key = pd.MultiIndex.from_arrays([frame["community"].values, frame["type"].values])
-        ct = comm_type.reindex(key)
-        n2 = ct[("adj_ppsf", "count")].fillna(0).to_numpy()
-        ct_ppsf = (ct[("adj_ppsf", "mean")].fillna(0).to_numpy() * n2 + comm_ppsf * SHRINK) / (n2 + SHRINK)
-        ct_price = (ct[("adj", "mean")].fillna(0).to_numpy() * n2 + prior_adj * SHRINK) / (n2 + SHRINK)
-        return pd.DataFrame({"comm_ppsf": comm_ppsf, "comm_type_ppsf": ct_ppsf, "comm_type_price": ct_price},
-                            index=frame.index)
+def static_features(homes, encoder):
+    """What a home is, ignoring when it is sold and what its neighbours sold for."""
+    X = pd.DataFrame(index=homes.index)
+    sqft = square_feet(homes["house_area"])
+    X["log_sqft"] = np.log(sqft)
+    X["bedrooms"] = homes["bedrooms"]
+    X["washrooms"] = homes["washrooms"]
+    X["parking"] = homes["parking_total"]
+    X["garage"] = homes["garage"]
+    X["sqft_per_room"] = sqft / (homes["bedrooms"] + homes["washrooms"]).clip(lower=1)
+    # A lot is worth more than its area suggests when it is wide. Empty for condos,
+    # which tree models handle without any filling in.
+    X["lot_front"] = homes["lot_front"]
+    X["lot_depth"] = homes["lot_depth"]
+    X["log_lot_area"] = np.log(homes["lot_front"] * homes["lot_depth"])
+    X["latitude"] = homes["latitude"]
+    X["longitude"] = homes["longitude"]
 
-    def _comps(self, homes, exclude_self=False):
-        """Median adjusted price and price per sq ft of the K nearest past sales of the same type."""
-        n = len(homes)
-        out = {"comp_price": np.full(n, np.nan), "comp_ppsf": np.full(n, np.nan),
-               "comp_price_near3": np.full(n, np.nan), "comp_distance": np.full(n, np.nan)}
-        kind = homes["house_type_name"].to_numpy()
-        points = xy(homes)
-        for t in np.unique(kind):
-            if t not in self.trees:
-                continue
-            tree, idx = self.trees[t]
-            rows = np.where(kind == t)[0]
-            k = min(K_COMPS + int(exclude_self), len(idx))
-            dist, nb = tree.query(points[rows], k=k)
-            if exclude_self:   # the nearest point of a training home is (usually) itself
-                own = idx[nb] == rows[:, None]
-                keep = ~own
-                # Drop exactly one column per row: itself if found, else the farthest.
-                keep[~own.any(axis=1), -1] = False
-                dist = dist[keep].reshape(len(rows), k - 1)
-                nb = nb[keep].reshape(len(rows), k - 1)
-            sale = idx[nb]
-            price = self.comp_adj[sale]
-            ppsf = self.comp_ppsf[sale]
-            out["comp_price"][rows] = np.median(price, axis=1)
-            out["comp_ppsf"][rows] = np.nanmedian(np.where(np.isfinite(ppsf), ppsf, np.nan), axis=1)
-            out["comp_price_near3"][rows] = np.median(price[:, :3], axis=1)
-            out["comp_distance"][rows] = dist[:, -1]
-        return pd.DataFrame(out, index=homes.index)
+    remarks = homes["remarks"].fillna("").str.lower()
+    for name, pattern in REMARK_FLAGS.items():
+        X["says_" + name] = remarks.str.contains(pattern, regex=True).astype(int)
+    X["remark_words"] = remarks.str.split().str.len()
 
-    # ------------------------------------------------------------ transform
-    def transform(self, homes, training=False):
-        """Features for `homes`. training=True only for the exact table given to fit()."""
-        X = pd.DataFrame(index=homes.index)
-        sqft = square_feet(homes["house_area"])
-        X["square_feet"] = sqft
-        X["log_sqft"] = np.log(sqft)
-        X["area_is_range"] = homes["house_area"].astype(str).str.contains("-").astype(int)
-        X["bedrooms"] = homes["bedrooms"]
-        X["washrooms"] = homes["washrooms"]
-        X["parking"] = homes["parking_total"]
-        X["garage"] = homes["garage"]
-        X["lot_front"] = homes["lot_front"]
-        X["lot_depth"] = homes["lot_depth"]
-        X["lot_area"] = homes["lot_front"] * homes["lot_depth"]
-        X["latitude"] = homes["latitude"]
-        X["longitude"] = homes["longitude"]
-        X["listed_month_of_year"] = homes["date_listed"].dt.month
-        for c in self.codes:
-            X[c] = homes[c].astype(str).map(self.codes[c]).fillna(-1).astype(int)
-            X.loc[X[c] < 0, c] = np.nan
+    for column, codes in encoder.transform(homes).items():
+        X[column] = codes
+    return X
 
-        remarks = homes["remarks"].fillna("").str.lower()
-        for name, pattern in KEYWORDS.items():
-            X[name] = remarks.str.contains(pattern, regex=True).astype(int)
-        X["remarks_length"] = remarks.str.len()
 
-        if training:
-            levels = self.train_levels.set_axis(homes.index)
-            comps = self.train_comps.set_axis(homes.index)
-        else:
-            frame = pd.DataFrame({"community": homes["community"].astype(str).values,
-                                  "type": homes["house_type_name"].values}, index=homes.index)
-            levels = self._apply_levels(frame, self.tables)
-            comps = self._comps(homes)
-        X = pd.concat([X, levels, comps], axis=1)
+def off_market_features(homes, market):
+    """Off-market: the home plus its comps, with every trace of list price removed.
 
-        # Simple "comparable sales" valuations in today's dollars.
-        X["value_from_comp_ppsf"] = X["comp_ppsf"] + X["log_sqft"]
-        X["value_from_comm_ppsf"] = X["comm_type_ppsf"] + X["log_sqft"]
+    That includes the sold-to-list ratios of past sales. They would arguably be allowed,
+    but "the off-market model never touches a list price" is a simpler promise to check.
+    """
+    comps = market.comps(homes)
+    comps = comps[[c for c in comps.columns if "sold_to_list" not in c]]
+    return pd.concat([static_features(homes, market.encoder), comps], axis=1)
 
-        if self.use_list_price:
-            listed = month_number(homes["date_listed"]).to_numpy()
-            index_listed = self.index_at(homes["house_type_name"].to_numpy(), listed)
-            log_list = np.log(homes["list_price"].to_numpy(float))
-            X["log_list_price"] = log_list
-            X["list_in_today_dollars"] = log_list - index_listed
-            X["list_vs_comps"] = X["list_in_today_dollars"] - X["comp_price"]
-            X["list_vs_comm_value"] = X["list_in_today_dollars"] - X["value_from_comm_ppsf"]
-            X["list_round_100k"] = (np.round(homes["list_price"]) % 100_000 == 0).astype(int)
-            X["list_ends_900"] = (np.round(homes["list_price"]) % 10_000 >= 9_000).astype(int)
-        return X
 
-    def categorical_mask(self, X):
-        return np.array([c in CATEGORICAL for c in X.columns])
+def list_aware_features(homes, market, comps=None):
+    """List-aware: the question becomes "above or below the asking price, and by how much?"
+
+    The useful signals are how the list price compares with what the comps suggest (an
+    underpriced listing draws bids; an overpriced one sits) and how sales nearby have
+    recently closed against their own list prices.
+    """
+    comps = market.comps(homes) if comps is None else comps
+    X = pd.concat([static_features(homes, market.encoder), comps], axis=1)
+    log_list = np.log(homes["list_price"].to_numpy())
+    level = market.level_when_sold(homes)
+    log_sqft = X["log_sqft"].to_numpy()
+    X["log_list_price"] = log_list
+    X["list_vs_nearest10"] = log_list - (X["nearest10_ppsf"].to_numpy() + level + log_sqft)
+    X["list_vs_nearest40"] = log_list - (X["nearest40_ppsf"].to_numpy() + level + log_sqft)
+    X["list_vs_community"] = log_list - (X["community_year_ppsf"].to_numpy() + level + log_sqft)
+    X["list_vs_building"] = log_list - (X["building_ppsf"].to_numpy() + level + log_sqft)
+    X["listed_on_round_number"] = (homes["list_price"].to_numpy() % 100_000 > 89_000).astype(int)
+    # Spring bidding is hotter than autumn bidding, every year.
+    X["calendar_month"] = homes["date_listed"].dt.month.to_numpy()
+    return X

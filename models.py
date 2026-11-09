@@ -1,18 +1,17 @@
-"""The models. Every model has the same two steps:
+"""Chapter 3 of the story: the models. Every model has the same two steps:
 
     model.fit(train)        train = past sales, including sold_price and date_sold
     model.predict(homes)    homes = homes to value, with only the columns of a test file;
                             returns one predicted sold price per home
 
-make_model() picks our model for each track (OffMarketModel, ListAwareModel, at the
-bottom of this file). make_baseline() returns the two starter baselines, which we keep
-to measure how much our ideas add.
+make_model() picks the model for each track. ListPriceBaseline and NearestSalesBaseline
+are the starter's baselines, kept so every result can be compared with them.
 """
 import numpy as np
-import pandas as pd
 from sklearn.ensemble import HistGradientBoostingRegressor
 
 import features
+import market
 
 
 def make_model(track):
@@ -22,11 +21,62 @@ def make_model(track):
     return OffMarketModel()
 
 
-def make_baseline(track):
-    """The two starter baselines, kept so `python run.py baselines` can compare against them."""
-    if track == "list_aware":
-        return ListPriceBaseline()
-    return NearestSalesBaseline(k=10)
+def _boosted_trees():
+    """The learner both tracks share.
+
+    The loss is absolute error, because the competition ranks on the MEDIAN absolute
+    error. Early stopping is off: it would hold out a random sample of rows, which is
+    exactly the time-mixing split this project avoids.
+    """
+    return HistGradientBoostingRegressor(loss="absolute_error", max_iter=400, learning_rate=0.06,
+                                         max_leaf_nodes=63, min_samples_leaf=30, l2_regularization=1.0,
+                                         early_stopping=False, random_state=0,
+                                         categorical_features=features.CATEGORICAL)
+
+
+class OffMarketModel:
+    """What is this home worth, with no list price?
+
+    log(price) = market level (forecast by MarketIndex) + time-free value (these trees).
+    The trees see the home and its earlier comps; they never see a date, so they cannot
+    freeze at the last month they saw, and they never see a list price.
+    """
+
+    def fit(self, train):
+        train = train.reset_index(drop=True)
+        self.market = market.market_for(train)
+        comps = self.market.comps(train, staleness_seed=0)
+        comps = comps[[c for c in comps.columns if "sold_to_list" not in c]]
+        X = features.static_features(train, self.market.encoder).join(comps)
+        self.columns = list(X.columns)
+        self.trees = _boosted_trees().fit(X, self.market.time_free_price)
+        return self
+
+    def predict(self, homes):
+        X = features.off_market_features(homes, self.market)[self.columns]
+        return np.exp(self.trees.predict(X) + self.market.level_when_sold(homes))
+
+
+class ListAwareModel:
+    """What will this listing close at, given its list price?
+
+    The target is log(sold / list), not the price. The list price already carries most
+    of what the market knows, so the trees only learn the correction: which listings
+    are priced to draw bids and which will have to come down.
+    """
+
+    def fit(self, train):
+        train = train.reset_index(drop=True)
+        self.market = market.market_for(train)
+        comps = self.market.comps(train, staleness_seed=0)
+        X = features.list_aware_features(train, self.market, comps)
+        self.columns = list(X.columns)
+        self.trees = _boosted_trees().fit(X, np.log(train["sold_price"] / train["list_price"]))
+        return self
+
+    def predict(self, homes):
+        X = features.list_aware_features(homes, self.market)[self.columns]
+        return homes["list_price"].to_numpy(dtype=float) * np.exp(self.trees.predict(X))
 
 
 class ListPriceBaseline:
@@ -77,124 +127,3 @@ class NearestSalesBaseline:
 
         nearest = np.argsort(distance, kind="stable")[: self.k]
         return float(np.median(earlier["sold_price"].to_numpy()[nearest]))
-
-
-class FeatureModel:
-    """A machine-learning model (gradient-boosted trees) on the features in features.py.
-
-    It learns log(price) rather than price, so a 10% miss on a cheap condo counts
-    as much as a 10% miss on an expensive house. Not used until you switch it on
-    in make_model().
-    """
-
-    def __init__(self, make_features):
-        self.make_features = make_features
-        self.model = HistGradientBoostingRegressor(random_state=0)
-
-    def fit(self, train):
-        self.model.fit(self.make_features(train), np.log(train["sold_price"]))
-        return self
-
-    def predict(self, homes):
-        return np.exp(self.model.predict(self.make_features(homes)))
-
-
-# --------------------------------------------------------------------------------------
-# Our models
-# --------------------------------------------------------------------------------------
-
-def gradient_boosting(loss="squared_error", quantile=None, max_iter=600, categorical=None):
-    return HistGradientBoostingRegressor(
-        loss=loss, quantile=quantile, learning_rate=0.05, max_iter=max_iter, max_leaf_nodes=63,
-        min_samples_leaf=40, l2_regularization=1.0, categorical_features=categorical,
-        early_stopping=False, random_state=0)
-
-
-class _BoostedModel:
-    """Shared machinery: a point model plus two quantile models for an 80% price range.
-
-    Subclasses say what the target is (`target`) and how to turn a predicted target back
-    into a price (`to_price`).
-    """
-    use_list_price = False
-    LOW, HIGH = 0.10, 0.90
-
-    def __init__(self, intervals=True):
-        self.intervals = intervals
-
-    def fit(self, train):
-        train = train.reset_index(drop=True)
-        self.builder = features.FeatureBuilder(self.use_list_price).fit(train)
-        X = self.builder.transform(train, training=True)
-        X = X.loc[:, X.notna().any()]          # a column with no values at all teaches nothing
-        self.columns = list(X.columns)
-        mask = self.builder.categorical_mask(X)
-        y = self.target(train)
-        self.point = gradient_boosting(categorical=mask).fit(X, y)
-        if self.intervals:
-            self.low = gradient_boosting("quantile", self.LOW, 250, mask).fit(X, y)
-            self.high = gradient_boosting("quantile", self.HIGH, 250, mask).fit(X, y)
-        return self
-
-    def _X(self, homes):
-        return self.builder.transform(homes)[self.columns]
-
-    def predict(self, homes):
-        return self.to_price(homes, self.point.predict(self._X(homes)))
-
-    def predict_interval(self, homes):
-        """80% range (10th and 90th percentile) of the sale price, one pair per home."""
-        X = self._X(homes)
-        low = self.to_price(homes, self.low.predict(X))
-        high = self.to_price(homes, self.high.predict(X))
-        point = self.to_price(homes, self.point.predict(X))
-        return np.minimum(low, point), np.maximum(high, point)
-
-
-class OffMarketModel(_BoostedModel):
-    """Off-market: no list price.
-
-    Target: log sold price in *last-month dollars* (sold price divided by the market index
-    of its type in the month it sold). The test homes are then priced at the latest
-    index level, which is all we know at prediction time.
-    """
-
-    def target(self, train):
-        return self.builder.adj
-
-    def to_price(self, homes, predicted):
-        return np.exp(predicted)
-
-
-class ListAwareModel(_BoostedModel):
-    """List-aware: predict the sold-to-list ratio (in logs) and multiply by the list price.
-
-    The list price carries most of the information; the model learns when homes sell
-    over or under asking: under-priced listings (list below its comparable sales),
-    neighbourhood, round-number list prices, the season.
-
-    The typical sold-to-list ratio moves with the market (bidding wars in 2022, homes
-    selling under asking later). A first version learned one ratio from all five years and
-    predicted 2.4% too high in every validation month. So, like the price index, we keep a
-    *ratio index*: the median log sold-to-list ratio per type and month. The model learns
-    each sale's ratio relative to its own month, and the test homes get the ratio of the
-    last three months of training sales.
-    """
-    use_list_price = True
-    RECENT_MONTHS = 3
-
-    def target(self, train):
-        ratio = np.log(train["sold_price"].to_numpy(float) / train["list_price"].to_numpy(float))
-        kind = train["house_type_name"].to_numpy()
-        month = features.month_number(train["date_sold"]).to_numpy()
-        frame = pd.DataFrame({"ratio": ratio, "kind": kind, "month": month})
-        monthly = frame.groupby(["kind", "month"])["ratio"].transform("median").to_numpy()
-        recent = frame[frame["month"] > month.max() - self.RECENT_MONTHS]
-        overall = float(recent["ratio"].median())
-        self.recent_ratio = recent.groupby("kind")["ratio"].median().to_dict()
-        self.recent_overall = overall
-        return ratio - monthly
-
-    def to_price(self, homes, predicted):
-        level = homes["house_type_name"].map(self.recent_ratio).fillna(self.recent_overall).to_numpy(float)
-        return homes["list_price"].to_numpy(float) * np.exp(predicted + level)
