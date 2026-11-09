@@ -1,6 +1,6 @@
 # What is this home worth *today*?
 
-**SSU Data Dash 2026: predicting Toronto home prices** · Team YOUR TEAM NAME
+**SSU Data Dash 2026: predicting Toronto home prices** · Team ABD
 
 > A seller in Leslieville asks: *"What's my semi worth?"* Their agent pulls the last
 > ten sales nearby and takes the median. But half of those sold in the spring 2022
