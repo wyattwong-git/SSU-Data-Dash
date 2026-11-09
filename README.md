@@ -1,6 +1,6 @@
 # What is this home worth, and when?
 
-**SSU Data Dash 2026: predicting Toronto home prices.** Case: [`handout.md`](handout.md). Judging: [`rubric.md`](rubric.md). All data is synthetic.
+**SSU Data Dash 2026: predicting Toronto home prices.** Team ABD: Wyatt Wong, Taimur Jaffer, Luca De Dios. Case: [`handout.md`](handout.md). Judging: [`rubric.md`](rubric.md). All data is synthetic.
 
 | Track | Question | Baseline MdAPE | **Our walk-forward MdAPE** | Ours, 4 months ahead (three periods) |
 |---|---|---|---|---|
