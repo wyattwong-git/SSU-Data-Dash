@@ -1,184 +1,89 @@
-# What is this home worth *today*?
+# What is this home worth, and when?
 
-**SSU Data Dash 2026: predicting Toronto home prices** · Team YOUR TEAM NAME
+**SSU Data Dash 2026: predicting Toronto home prices.** Case: [`handout.md`](handout.md). Judging: [`rubric.md`](rubric.md). All data is synthetic.
 
-> A seller in Leslieville asks: *"What's my semi worth?"* Their agent pulls the last
-> ten sales nearby and takes the median. But half of those sold in the spring 2022
-> frenzy, two were condos, and none was the same size. That gets you an estimate that's
-> off by **one fifth**, and it's what the starter model does.
->
-> We built a model that fixes each of those mistakes, one at a time. It cuts the error on
-> the hard question, an off-market home with no asking price, from
-> **20.8% to 7.86%**.
-
-| Track | Question | Starter baseline (MdAPE) | **Our model (MdAPE)** | MAPE |
+| Track | Question | Baseline MdAPE | **Our walk-forward MdAPE** | Ours, 4 months ahead (three periods) |
 |---|---|---|---|---|
-| Off-market (counts ×2) | What is this home worth, with no list price? | 20.8% | **7.86%** | 10.18% |
-| List-aware | What will this listing close at? | 7.3% | **3.96%** | 5.11% |
+| Off-market (counts double) | What is it worth, with no list price? | 20.8% (starter) | **6.96%** | 6.70% to 7.61% |
+| List-aware | What will this listing close at? | 7.3% (list price) | **3.96%** | 4.17% to 4.46% |
 
-*Walk-forward validation, December 2025 to May 2026: every month is predicted only from
-the sales before it, the same way the hidden test works. The bar to beat ("maximum error")
-is 17.7%. Full table with 95% intervals:
-[`reports/validation_report.md`](reports/validation_report.md).*
+The bar to beat is 17.7% on both tracks. **We expect about 7 to 8% and 4 to 4.5% on the hidden test.** Full table: [`reports/validation_report.md`](reports/validation_report.md).
 
----
+## The story
 
-## The story in four chapters
+### 1. The trap: the test is further away than it looks
+The starter's validation predicts one month ahead. The hidden test is up to **four** months past the last sale we can see. Tree models cannot extrapolate: give them the date and they freeze at the last month they saw. Prices here also rise every spring and fall every autumn, and the test covers June to September.
 
-### 1. The problem: a price is a moment in time
+### 2. The idea: separate *when* from *what*
 
-Toronto prices boomed through early 2022, fell hard, and drifted through 2026. A sale from
-February 2022 says very little about a home's value in June 2026 *until you adjust it for
-the market*. The starter baseline doesn't adjust, so its comparable sales are stale.
-
-**What we did.** We built a **market index** per property type and month. Location is
-removed first (each sale is compared to its own neighbourhood and type), then we take the
-monthly median of what's left and smooth it over three months. Every past sale is
-converted to *last-month dollars*. The model learns in those dollars and prices the test
-homes at the latest level. That's the only honest choice, because we can't see June to
-September.
-
-### 2. Location, done carefully
-
-"Nearby" means a lot more than a radius. We give the model three views of location, all
-measured in today's dollars:
-
-- **Comparable sales.** The 10 nearest past sales *of the same property type*, with their
-  median adjusted price, median price per sq ft, the closest three, and how far away the
-  10th one is (a measure of how sure we can be).
-- **Neighbourhood levels.** Each community's price per sq ft, overall and by type,
-  *shrunk toward the city average* when the community has few sales, so one odd sale
-  can't define a neighbourhood.
-- **Raw coordinates** for the tree model to find finer patterns.
-
-**No leakage, even in training.** A training home's own price is never part of its
-features. Neighbourhood levels are computed *out-of-fold* (5 folds), and comparable sales
-skip the home itself.
-
-### 3. What the listing says
-
-The remarks are written by the seller's agent, and they say a lot: *"fully redone"*,
-*"offered as-is"*, *"for an investor looking for potential"*. We flag keyword groups
-(renovated, needs work, luxury, views and ravines, pool, basement and income suites,
-transit, corner lot, penthouse) and add size, rooms, parking, garage and lot features.
-
-### 4. The list-aware track: predict the gap, not the price
-
-When the list price is known, it already holds most of what the market knows (the starter
-gets 7.3% just by copying it). So we **predict the sold-to-list ratio** instead of the
-price. The model learns *when* homes go over or under asking:
-
-- **List vs comparable sales.** A listing priced below its comps attracts bidding wars.
-- **List vs neighbourhood value.**
-- **Pricing strategy.** Round numbers like \$1,000,000 and "charm" prices like \$899,900.
-- **Season and type.**
-
-The off-market model **never sees the list price**. It's removed before the model is
-called (`data.hide_answers`), exactly as in the off-market test file.
-
----
-
-## How honest is it?
-
-**Walk-forward, not random.** A random split lets the model peek at the future and
-makes the error look smaller than it is. `python run.py validate` retrains from scratch for
-each of six months, using only sales *before* that month.
-
-**We did not use the third-party estimate** (`external_avm_estimate`). It isn't in
-the test files, and many of its dates fall *after* the sale. A model that leans on it
-couldn't be used in real life.
-
-**Uncertainty, not just a number.** Two extra models predict the 10th and 90th percentile
-of the price, which gives an 80% range for every home:
-
-| Track | Sold price inside our 80% range | Typical range width |
-|---|---|---|
-| Off-market | 73.9% | ±14% (a little narrow: widen ~10% before relying on it) |
-| List-aware | 78.9% | ±8% |
-
-The test-set ranges are in `outputs/test_ranges_*.csv` after `python run.py predict`.
-
-**One run, not the best of many.** The numbers above come from a single validation run of
-the final model. We didn't tune on the validation months, so the hidden test should land
-close to them. The hidden test runs 1 to 4 months past the last training sale, while
-validation is only ever 1 month ahead, so expect slightly larger errors if the market moves
-over the summer.
-
----
-
-## Where it fails
-
-`python run.py analysis` writes [`reports/error_analysis.md`](reports/error_analysis.md) and
-these figures:
-
-| | |
-|---|---|
-| ![Error by price range](figures/error_by_price_range.png) | ![Error by property type](figures/error_by_type.png) |
-
-**What the errors tell us**
-
-- **Condos are easiest** (off-market 6.6% MdAPE). Units in one building share a location and
-  comparable sales. **Detached homes (9.9%), freehold townhouses (10.3%) and co-ops (11.4%,
-  only 48 homes) are hardest.** For freehold homes, lot, layout and condition vary far more
-  than any listing field captures.
-- **The worst neighbourhoods are *consistently* under-predicted.** In Hazelfield (15.6% MdAPE)
-  the median signed error is −11%, and Maplepark, Sycamoredale and Birchgrove are similar.
-  These areas appear to be rising faster than the city-wide index for their type. A
-  community-level index is our next step.
-- **Extremes are hard.** The cheapest and dearest tenth of homes have fewer comparables, and
-  the model pulls them toward typical prices.
-- **Monthly swings are market noise.** Off-market bias moves between −2.7% and +3.0% from
-  month to month, but MdAPE stays between 7.4% and 8.0%. That steadiness is why we expect the
-  hidden test to land near our validation number.
-- **One fix, made after looking.** Our first list-aware model predicted **2.4% too high in
-  every month**. It had learned 2022's bidding-war sold-to-list ratios. Adding a *ratio index*
-  (chapter 4) brought the bias to −0.4% and MdAPE from 4.53% to 3.96%. This was the only change
-  we made after seeing validation results.
-
-**When not to trust it:** co-ops, the top and bottom price tenths, communities with few
-recent sales, and any month where the market turns sharply.
-
-![Bias by month](figures/bias_by_month.png)
-
----
-
-## Run it yourself
-
-Python 3.10+. The data downloads itself from
-[Hugging Face](https://huggingface.co/datasets/Baliyang/SSU_data_dash) on first use.
-
-```bash
-pip install -r requirements.txt
-python run.py validate    # walk-forward test, Dec 2025 to May 2026 (~10 min)
-python run.py report      # results table, 80% range coverage, figure
-python run.py analysis    # errors by type, month, neighbourhood
-python run.py predict     # write both submission files (+ 80% ranges)
-python run.py check       # check them
-pytest                    # leakage and pipeline tests
+```
+log(price) = market level when it sells   +   what this particular home is worth
+             forecast explicitly              learned by gradient-boosted trees
+             (market.py: MarketIndex)         (features.py, models.py)
 ```
 
-Optional: `python run.py baselines` reruns the two starter baselines for a side-by-side
-table (slow: the nearest-sales baseline loops over every home).
+The market level is measured on comparable homes, so a month with more condos does not look like a crash. The forecast is humble: the recent level plus the season. Dropping the season costs off-market about 1.1 points of MdAPE.
 
-Already have the files? `DATA_DIR=path/to/folder python run.py validate`.
+### 3. The neighbours, with one strict rule
+What similar homes nearby sold for is a key signal: the nearest sales, the same building, the same community. **A sale counts as a comp only if it closed strictly before this home was listed.** `tests/test_submission_model.py` plants absurd later sales and checks that nothing changes.
 
-## What's where
+### 4. What the listing says
+The remarks describe condition: "fully redone" versus "offered as-is". Twelve groups of phrases cut off-market MdAPE by about 0.9 points.
 
-| File | What it does |
-|---|---|
-| [`features.py`](features.py) | `FeatureBuilder`: market index, neighbourhood levels, comparable sales, text flags. Learns only from the training sales. |
-| [`models.py`](models.py) | `OffMarketModel` (log price in today's dollars) and `ListAwareModel` (log sold-to-list ratio), gradient-boosted trees with 80% ranges. Starter baselines kept for comparison. |
-| [`run.py`](run.py) | `validate`, `report`, `analysis`, `predict`, `check`, `baselines`. |
-| [`submissions/`](submissions) | The two files we hand in. |
-| [`report/report.tex`](report/report.tex) | Our 4-page report. |
-| [`handout.md`](handout.md), [`rubric.md`](rubric.md) | The case, from the organisers. |
+### 5. Two different questions
+**Off-market** never touches a list price, not even past homes' sold-to-list ratios. **List-aware** predicts `log(sold / list)`, learning only the correction to the asking price.
 
-## Rules we followed
+### 6. What we refused to use
+- `external_avm_estimate`: 70% of its dates are after the sale, and the test files do not have it.
+- `days_on_market` and `date_sold`: known only after the sale.
+- The hint that a test home listed long ago must have sold slowly: that comes from how the test file was selected.
 
-- **No outside data.** Everything comes from the provided synthetic files.
-- **No list price in the off-market model**, and nothing known only after the sale (sold
-  price, sale date, days on market, third-party estimate) is used as a feature.
-- Every number here comes from our own walk-forward validation.
+### 7. Keeping ourselves honest
+All choices were made on **one development block** (train before June 2025, test June to September 2025). The official months were only run after the design was frozen. Ideas that failed are reported too, in [`reports/experiments.md`](reports/experiments.md), including one of our own (aging the training comps). The same simple model scored 9.86% on a time-based test and a flattering 8.19% on a random split.
 
-*All data is synthetic. Built on the organisers'
-[starter repository](https://github.com/erwinzhang7/SSU-Data-Dash).*
+### 8. Where it fails
+- **Expensive homes.** Over $2.5M, off-market MdAPE is 14.84% with a median undervaluation of 11.5%. Comps are scarce and the trees shrink towards typical prices.
+- **Freehold homes.** Detached, semi and freehold townhouses sit at 8.5 to 9%, against 5.9% for condos.
+- **Some neighbourhoods.** MdAPE runs from 3.39% to 13.01%, with biases in both directions.
+- **Bidding wars.** In list-aware, homes closing over 110% of list have 12.18% MdAPE, almost all of it undervaluation.
+
+Our 80% price ranges held the sold price 79% of the time in validation and 76 to 78% four months ahead, so they are slightly narrow. Ranges for every test home: `reports/price_ranges_*.csv`.
+
+![Error by price range](figures/error_by_price_range.png)
+![Error by type](figures/error_by_type.png)
+![Error by months ahead](figures/error_by_horizon.png)
+
+## Where things are
+
+| File | Chapter | What it does |
+|---|---|---|
+| `features.py` | 1 | Describes a home in numbers, using only pre-sale columns |
+| `market.py` | 2 | Market index, its forecast, and time-safe comps |
+| `models.py` | 3 | The two models, plus the starter baselines |
+| `run.py` | 4 | Commands: validation, backtests, predictions |
+| `analysis.py` | 5 | Where it fails, and the calibrated price ranges |
+| `experiments.py` | | Every variant we tried, on the development block |
+| `tests/` | | The starter's checks and our leakage checks |
+| `submissions/` | | **The two files we hand in** |
+| `report/report.tex` | | The report |
+| `video/talking_points.md` | | Outline and numbers for the video |
+
+## Reproduce it
+
+Python 3.10 or newer. The data downloads itself from [Hugging Face](https://huggingface.co/datasets/Baliyang/SSU_data_dash). On Windows, use `py` if `python` is not found.
+
+```
+pip install -r requirements.txt
+pytest                     # the checks, on tiny made-up data
+python run.py validate     # required walk-forward test, Dec 2025 to May 2026
+python run.py report       # results table and figure
+python run.py backtest     # frozen training, four months ahead, three periods
+python run.py predict      # writes submissions/submission_off_market.csv and submission_list_aware.csv
+python run.py analyse      # failure analysis, figures and price ranges
+python run.py check        # the organisers' format check
+python experiments.py      # optional: every variant we tried
+```
+
+Random seeds are fixed. Tiny floating-point differences are possible across platforms.
+
+**Outside data:** none.

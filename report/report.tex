@@ -1,5 +1,5 @@
 % SSU Data Dash 2026: team report. Compile from this folder (Overleaf: upload the whole
-% repository as a zip). `python run.py report` and `python run.py analysis` write the table and figures.
+% repository as a zip). `python run.py report` and `python run.py analyse` write the table and figures.
 \documentclass[11pt]{article}
 \usepackage[margin=2.2cm]{geometry}
 \usepackage{graphicx,booktabs,hyperref}
@@ -19,120 +19,96 @@
 \end{tabular}
 
 \section*{Summary}
-The starter values an off-market home as the median of the ten nearest past sales. That fails
-for three reasons: the sales are from a different market (2022 vs 2026), they are different
-sizes, and nothing about the home itself is used. We fix each of these. A \textbf{market index}
-converts every past sale to today's dollars. \textbf{Leak-free comparable-sales and neighbourhood
-features} describe location in those dollars, and listing-text flags describe condition. A
-gradient-boosted model learns the rest. On walk-forward validation (December 2025 to May 2026)
-the off-market MdAPE falls from 20.8\% to \textbf{7.86\%}, and the list-aware MdAPE from 7.3\%
-to \textbf{3.96\%}. The main lesson: \emph{time} is the biggest error source. That holds
-for price levels and also for sold-to-list ratios, which drifted as bidding wars faded.
+A price is a moment in time, so we separate \emph{when} a home sells from \emph{what} it is. A forecast market level, including the season, carries the time; gradient-boosted trees value the home from its features and from comparable sales made before it was listed. On the required walk-forward validation (December 2025 to May 2026), MdAPE is \textbf{6.96\% off-market} and \textbf{3.96\% list-aware}. The hidden test runs up to four months past the last training sale, so we also froze training and predicted four months ahead over three periods: 6.70--7.61\% off-market and 4.17--4.46\% list-aware. \textbf{We expect about 7--8\% and 4--4.5\% on the hidden test.} Main finding: the model is steady over time but pulls extreme homes towards the middle; it undervalues homes over \$2.5M by a median of 11\%.
 
 \section{Data and features}
-All features come from columns available in the test files. Anything known only after the sale
-(sold price, sale date, days on market, the third-party estimate) is never used. Every learned
-quantity is computed inside \texttt{FeatureBuilder.fit()} from the training sales only.
+Every feature comes from a column in the test files or from strictly earlier sales.
 \begin{itemize}\itemsep0pt
-\item \textbf{Market index.} For each property type and month, the median residual log price
-after removing each sale's community-by-type level (two passes), smoothed over 3 months. Prices
-are converted to last-month dollars, and test homes are priced at the latest level.
-\item \textbf{Comparable sales.} The 10 nearest past sales of the same type (KD-tree on
-latitude/longitude): median adjusted price, price per sq ft, nearest-3 median, distance to the
-10th comparable. A training home never counts itself.
-\item \textbf{Neighbourhood levels.} Adjusted price per sq ft by community and by
-community$\times$type, shrunk toward the type mean (20-sale prior). Training rows get
-5-fold out-of-fold values to avoid target leakage.
-\item \textbf{Home and text.} Square feet (range midpoints), rooms, parking, garage, lot size,
-style, municipality, coordinates, listing month, and nine keyword groups from the remarks
-(renovated, needs work/as-is, luxury, views/ravine, pool, basement/income suite, transit,
-corner, penthouse).
-\item \textbf{List-aware only.} Log list price, list price in today's dollars, list price minus
-comparable value, list price minus neighbourhood value, round-number and \$\ldots9,000 pricing flags.
+\item \textbf{The home.} Size (range midpoints), rooms, parking, garage, lot, style, type, community, municipality, coordinates.
+\item \textbf{Remarks.} Twelve groups of phrases about condition and appeal (renovated, needs work, high-end finishes, views, and so on), written from sales before June 2025. No single phrase moved price by more than about 2\%; together they cut off-market MdAPE by 0.86 points.
+\item \textbf{Comparable sales.} Means over the 10 and 40 nearest sales of the same type, the same building, and the same community and type (all history and last 365 days). Each comp contributes time-adjusted price per sq ft and how far it beat a date-blind price model.
+\item \textbf{List-aware only.} List price, its gap to each comp-based value, round-number pricing, calendar month, and past sold-to-list ratios of the comps.
 \end{itemize}
+\textbf{Left out on purpose.} \texttt{external\_avm\_estimate}: 70\% of its dates are after the sale and the test files lack it. \texttt{days\_on\_market} and \texttt{date\_sold}: known only after the sale. We also do not exploit the fact that a test home listed long before June must have sold slowly: that comes from how the test file was selected, and a real user would not know it.
 
 \section{Models}
-\textbf{Off-market.} Histogram gradient boosting (600 trees, 63 leaves, learning rate 0.05) on log
-price in today's dollars. The list price is removed before the model sees the homes.
+\textbf{Market index (both tracks).} A date-blind tree model prices each sale; the median amount each month's sales beat it, per property type, is that month's market level, so it does not move with the mix of homes. Trees cannot extrapolate, so the forecast is explicit: the deseasonalised level of the last three months plus the season of the month being predicted. The expected sale date is the listing date plus 12 days, the median time on market.
 
-\textbf{List-aware.} The same learner predicts the \emph{log sold-to-list ratio}, which is then
-multiplied by the list price. The list price already carries most of the information, so the
-model only learns the gap. Our first version learned one ratio level from all five years and
-predicted 2.4\% too high in \emph{every} validation month: the 2022 over-asking market had
-faded. We added a \emph{ratio index} (median log ratio per type and month). The model learns each
-sale's ratio relative to its month, and test homes get the median ratio of the last three
-training months. This was the only change we made after seeing validation results, and we
-report both versions.
+\textbf{Off-market.} Histogram gradient boosting with absolute-error loss, chosen because ranking is on the median error, predicts log price net of the market level; the forecast level is added back. It sees no date and no list price, not even past homes' sold-to-list ratios.
 
-\textbf{Uncertainty.} Two quantile models (10th and 90th percentile) give an 80\% price range
-for every home.
+\textbf{List-aware.} The same learner predicts $\log(\mathrm{sold}/\mathrm{list})$, so it only learns the correction to the asking price.
+
+\textbf{Uncertainty.} 80\% price ranges per property type come from errors on June--September 2025 predictions and are checked on later sales (Section 4). Ranges for every test home are in the \texttt{reports} folder.
 
 \section{Validation}
-We used the starter's walk-forward scheme: for each month from December 2025 to May 2026, all
-models are retrained from scratch on sales strictly before that month and predict that month's
-homes, with answer columns removed by \texttt{data.hide\_answers}. No random split and no tuning
-loop on these months. Hyper-parameters are fixed, sensible defaults. Unit tests check that the
-baseline never uses later sales and that the full pipeline runs end to end.
+\textbf{Three separate uses of time.} (1) \emph{Choosing:} every design choice was made on one development block, trained before June 2025 and tested on June--September 2025, the hidden test's shape and season a year earlier. (2) \emph{Required walk-forward:} after the design was frozen, each month from December 2025 to May 2026 was predicted once by models retrained on earlier sales. (3) \emph{Four-month backtests:} training frozen, next four months predicted, because the walk-forward only ever looks one month ahead.
+
+\textbf{Leakage controls.} Answer columns are removed by \texttt{hide\_answers} before prediction. A comp counts only if sold strictly before the home's listing date. Automated tests plant absurd later sale values and confirm the comps do not change, and confirm off-market predictions do not move with the list price. Early stopping is off, since it would hold out a random sample. \textbf{Disclosure:} within a training set, the market level used to time-adjust older comps is estimated on that whole set, so training rows benefit from it slightly; nothing after a cutoff ever reaches a prediction.
 
 \section{Results}
-\begin{table}[h]
-\centering
-\small
+\begin{table}[!ht]
+\centering\small
 \input{../reports/results_table.tex}
-\caption{Walk-forward validation, Dec 2025 to May 2026 (10,069 homes per track). Brackets:
-bootstrap 95\% interval.}
+\caption{Required walk-forward validation, Dec 2025 to May 2026. Brackets: bootstrap 95\% interval, treating homes as independent.}
 \end{table}
-
-\begin{table}[h]
-\centering
-\small
-\begin{tabular}{llcc}
+\vspace{-6pt}
+\begin{table}[!ht]
+\centering\small
+\begin{tabular}{lcccc}
 \toprule
-Track & Model & MdAPE & MAPE \\
+& \multicolumn{2}{c}{Off-market} & \multicolumn{2}{c}{List-aware} \\
+Test & MdAPE & MAPE & MdAPE & MAPE \\
 \midrule
-Both & Maximum error (type $\times$ community 12-month median) & 17.7\% & 22.0\% \\
-Off-market & Starter: 10 nearest earlier sales & 20.8\% & 27.4\% \\
-Off-market & \textbf{Ours} & \textbf{7.86\%} & \textbf{10.18\%} \\
-List-aware & Starter: list price & 7.3\% & 8.1\% \\
-List-aware & Ours, first version (no ratio index) & 4.53\% & 5.68\% \\
-List-aware & \textbf{Ours, final} & \textbf{3.96\%} & \textbf{5.11\%} \\
+Maximum error (handout; we recomputed 17.72) & 17.7 & 22.0 & 17.7 & 22.0 \\
+Starter baseline (handout) & 20.8 & 27.4 & 7.3 & 8.1 \\
+\textbf{Ours, walk-forward (one month ahead)} & \textbf{6.96} & 9.25 & \textbf{3.96} & 5.04 \\
+Ours, frozen 4 months: Jun--Sep 2024 & 6.70 & 9.06 & 4.46 & 5.56 \\
+Ours, frozen 4 months: Jun--Sep 2025 (development) & 7.29 & 9.96 & 4.17 & 5.25 \\
+Ours, frozen 4 months: Feb--May 2026 & 7.61 & 9.80 & 4.22 & 5.31 \\
 \bottomrule
 \end{tabular}
-\caption{Against the baselines (baseline figures from the case handout).}
+\caption{Against the baselines, and in the hidden test's four-month shape (\%).}
 \end{table}
 
-Off-market error falls by 62\% against the starter and is well under the 17.7\% bar. The error
-is stable from month to month (7.4\% to 8.0\%), which suggests the hidden test will land nearby.
-The off-market median signed error is $-0.35\%$, so there is no systematic bias. Our 80\% ranges
-held the sold price 73.9\% (off-market) and 78.9\% (list-aware) of the time, slightly below
-80\%. The off-market ranges are a little too narrow and should be widened about 10\% before being relied on.
+Off-market error is 67\% below the starter and well under the bar. Monthly walk-forward MdAPE stays between 6.84\% and 7.26\% off-market. Our 80\% ranges held the sold price 78.8\% of the time off-market and 79.5\% list-aware in validation, falling to 75.8\% and 77.9\% four months ahead: slightly narrow, so treat them as about 75\% ranges at that distance.
+
+\begin{table}[!ht]
+\centering\small
+\begin{tabular}{lcc}
+\toprule
+Change, on the development block & Off-market MdAPE & List-aware MdAPE \\
+\midrule
+\textbf{Final design} & \textbf{7.29} & \textbf{4.17} \\
+Draft: training comps aged 0--120 days (\emph{tried, dropped}) & 7.35 & 4.24 \\
+Draft without the seasonal term (\emph{season kept}) & 8.43 & 4.48 \\
+Draft without remark phrases (\emph{phrases kept}) & 8.21 & 4.39 \\
+Draft plus half the recent trend (\emph{no clear gain, left out}) & 7.47 & 4.21 \\
+Draft with squared-error loss (\emph{worse list-aware, left out}) & 7.24 & 4.36 \\
+Control: date as a feature, no comps, time-based test & 9.86 & -- \\
+Same control on a \emph{random} 20\% split (flattering: do not use) & 8.19 & -- \\
+\bottomrule
+\end{tabular}
+\caption{What we tried. Differences of a few hundredths are within noise; we did not chase them.}
+\end{table}
 
 \section{Where the model fails}
-\begin{figure}[h]
+\begin{figure}[!ht]
 \centering
 \includegraphics[width=0.49\linewidth]{error_by_price_range.png}
-\includegraphics[width=0.49\linewidth]{error_by_type.png}
-\caption{Absolute \% error by sold-price decile (left) and by property type (right).}
+\includegraphics[width=0.49\linewidth]{error_by_type.png}\\
+\includegraphics[width=0.62\linewidth]{error_by_horizon.png}
+\caption{Validation error by price and type; backtest error by months past the last training sale.}
 \end{figure}
-\textbf{By type.} Condos are easiest off-market (6.6\% MdAPE): units in one building share a
-location and comparables. Detached homes (9.9\%), freehold townhouses (10.3\%) and especially
-co-ops (11.4\%, only 48 homes, MAPE 19\%) are hardest. For freehold homes, lot, layout and
-condition vary far more than our features capture.
-\textbf{By neighbourhood.} The worst communities (e.g.\ Maplepark, Hazelfield: 15--16\% MdAPE)
-have large \emph{signed} errors ($-5\%$ to $-11\%$). We under-predict them consistently, which
-suggests their prices are moving faster than the type-level market index. A community-level
-index would be the next step.
-\textbf{By price.} Errors are highest at the extremes, where comparables are scarce and the
-model pulls toward typical prices.
-\textbf{By month.} Off-market bias swings between $-2.7\%$ and $+3.0\%$ month to month. This is
-market noise no model can foresee.
+\textbf{Price.} This is the largest failure. Off-market MdAPE is 5.6--6.0\% under \$750k but 14.84\% over \$2.5M, with a median signed error of $-11.5\%$; homes under \$500k are overvalued by 4.5\%. Comps are scarce at the top and absolute-error trees shrink towards typical prices. Knowing the list price largely fixes this (5.39\% over \$2.5M).
+
+\textbf{Type.} Condos are easiest (5.88\% off-market, 3.23\% list-aware): a building's units share a location and price level. Freehold homes are harder (detached 8.73\%, semi 8.53\%, freehold townhouse 9.00\%), we think because land and condition vary more than our features capture. Co-ops show 9.43\% from only 48 homes, too few to conclude much.
+
+\textbf{Neighbourhood.} Among communities with at least 40 homes, off-market MdAPE runs from 3.39\% to 13.01\%. The worst show large biases in both directions (Hazelfield $-7.7\%$, Cypressglen $+8.5\%$), which suggests local trends our type-level index misses, though with 40--70 homes each some of this is chance.
+
+\textbf{Bidding wars.} In list-aware, homes that closed over 110\% of list have 12.18\% MdAPE, and almost all of those errors are undervaluations. The model cannot fully tell which listings will draw a bidding war. Off-market does better on them (9.04\%), we think because the list price it lacks is what anchors list-aware too low there.
 
 \section{Limitations}
-The hidden test is 1--4 months past the last training sale, while validation is always 1 month
-ahead. If prices move over the summer, our flat index will miss it, so hidden-test error may be
-somewhat higher. The 80\% ranges under-cover. Text features are simple keyword flags; a sentence
-embedding of the remarks could capture condition better. Do not trust the model for co-ops,
-for the top and bottom price deciles, or in communities with few recent sales.
+A small positive bias persists (median signed $+0.8\%$ in validation, up to $+2.4\%$ in backtests): if the market softens faster than its recent level and season imply, we overvalue. The forecast cannot foresee a shock; the bootstrap intervals assume independent homes, so true uncertainty is wider. The data is synthetic, so these errors say how the method behaves, not how accurate it would be in the real market. \textbf{Do not rely on the off-market value} above about \$2.5M, for co-ops, or in communities with few recent sales. \textbf{Next:} community-level indices, and a dedicated model for the top of the market.
 
 \section*{Outside data}
 \begin{tabular}{lll}
@@ -145,7 +121,8 @@ None & --- & --- \\
 
 \section*{Reproducing our results}
 \texttt{pip install -r requirements.txt}\\
-\texttt{python run.py validate \&\& python run.py report \&\& python run.py analysis}\\
-\texttt{python run.py predict \&\& python run.py check}
+\texttt{python run.py validate \&\& python run.py report \&\& python run.py backtest}\\
+\texttt{python run.py predict \&\& python run.py analyse \&\& python run.py check}\\
+\texttt{python experiments.py} reruns the table of variants.
 
 \end{document}

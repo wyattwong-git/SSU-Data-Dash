@@ -1,0 +1,618 @@
+{
+  "off_market": {
+    "validation": {
+      "homes": 10069.0,
+      "mdape": 6.96,
+      "mape": 9.25,
+      "median_signed": 0.8
+    },
+    "by_month": {
+      "2025-12": {
+        "homes": 1238,
+        "mdape": 7.26,
+        "mape": 9.59,
+        "median_signed": 3.83
+      },
+      "2026-01": {
+        "homes": 1058,
+        "mdape": 6.92,
+        "mape": 9.27,
+        "median_signed": 0.99
+      },
+      "2026-02": {
+        "homes": 1442,
+        "mdape": 6.84,
+        "mape": 9.03,
+        "median_signed": -0.92
+      },
+      "2026-03": {
+        "homes": 1816,
+        "mdape": 7.01,
+        "mape": 9.32,
+        "median_signed": 0.43
+      },
+      "2026-04": {
+        "homes": 2224,
+        "mdape": 6.93,
+        "mape": 9.11,
+        "median_signed": 1.18
+      },
+      "2026-05": {
+        "homes": 2291,
+        "mdape": 6.92,
+        "mape": 9.26,
+        "median_signed": -0.01
+      }
+    },
+    "backtest": {
+      "Feb-May 2026": {
+        "homes": 7773,
+        "mdape": 7.61,
+        "mape": 9.8,
+        "median_signed": 1.19
+      },
+      "Jun-Sep 2024": {
+        "homes": 7630,
+        "mdape": 6.7,
+        "mape": 9.06,
+        "median_signed": 0.59
+      },
+      "Jun-Sep 2025 (development)": {
+        "homes": 8052,
+        "mdape": 7.29,
+        "mape": 9.96,
+        "median_signed": 2.4
+      }
+    },
+    "by_type": {
+      "Co-Op Apt": {
+        "homes": 48,
+        "mdape": 9.43,
+        "mape": 17.34,
+        "median_signed": -0.19
+      },
+      "Condo Apt": {
+        "homes": 4843,
+        "mdape": 5.88,
+        "mape": 7.93,
+        "median_signed": 1.73
+      },
+      "Condo Townhouse": {
+        "homes": 616,
+        "mdape": 6.0,
+        "mape": 7.17,
+        "median_signed": 1.23
+      },
+      "Detached": {
+        "homes": 3123,
+        "mdape": 8.73,
+        "mape": 11.05,
+        "median_signed": -0.04
+      },
+      "Freehold Townhouse": {
+        "homes": 405,
+        "mdape": 9.0,
+        "mape": 10.78,
+        "median_signed": -2.42
+      },
+      "Semi-Detached": {
+        "homes": 1034,
+        "mdape": 8.53,
+        "mape": 10.25,
+        "median_signed": -2.99
+      }
+    },
+    "by_price": {
+      "under $500k": {
+        "homes": 1744,
+        "mdape": 5.95,
+        "mape": 7.87,
+        "median_signed": 4.53
+      },
+      "$500-750k": {
+        "homes": 2810,
+        "mdape": 5.6,
+        "mape": 7.56,
+        "median_signed": 1.84
+      },
+      "$750k-1M": {
+        "homes": 1884,
+        "mdape": 6.8,
+        "mape": 8.55,
+        "median_signed": 1.08
+      },
+      "$1-1.5M": {
+        "homes": 2146,
+        "mdape": 8.22,
+        "mape": 10.07,
+        "median_signed": -2.79
+      },
+      "$1.5-2.5M": {
+        "homes": 1070,
+        "mdape": 10.13,
+        "mape": 12.19,
+        "median_signed": -5.04
+      },
+      "over $2.5M": {
+        "homes": 415,
+        "mdape": 14.84,
+        "mape": 17.77,
+        "median_signed": -11.47
+      }
+    },
+    "by_sale_outcome": {
+      "far below list (<93%)": {
+        "homes": 4005,
+        "mdape": 6.84,
+        "mape": 9.17,
+        "median_signed": 1.37
+      },
+      "below list (93-97%)": {
+        "homes": 2348,
+        "mdape": 6.7,
+        "mape": 9.07,
+        "median_signed": 0.67
+      },
+      "near list (97-103%)": {
+        "homes": 2123,
+        "mdape": 6.92,
+        "mape": 9.03,
+        "median_signed": 0.71
+      },
+      "above list (103-110%)": {
+        "homes": 903,
+        "mdape": 7.21,
+        "mape": 9.55,
+        "median_signed": -0.41
+      },
+      "bidding war (>110%)": {
+        "homes": 690,
+        "mdape": 9.04,
+        "mape": 10.59,
+        "median_signed": -1.75
+      }
+    },
+    "by_time_on_market": {
+      "within a week": {
+        "homes": 1919,
+        "mdape": 7.9,
+        "mape": 10.17,
+        "median_signed": -0.03
+      },
+      "8-30 days": {
+        "homes": 4530,
+        "mdape": 7.06,
+        "mape": 9.24,
+        "median_signed": 1.03
+      },
+      "31-90 days": {
+        "homes": 2788,
+        "mdape": 6.32,
+        "mape": 8.69,
+        "median_signed": 0.6
+      },
+      "over 90 days": {
+        "homes": 832,
+        "mdape": 6.92,
+        "mape": 9.03,
+        "median_signed": 1.86
+      }
+    },
+    "best_communities": {
+      "Dogwoodbrook": {
+        "homes": 40,
+        "mdape": 3.39,
+        "mape": 5.49,
+        "median_signed": -0.97
+      },
+      "Hemlockhollow": {
+        "homes": 56,
+        "mdape": 4.33,
+        "mape": 6.72,
+        "median_signed": -1.35
+      },
+      "Sprucehaven": {
+        "homes": 55,
+        "mdape": 4.46,
+        "mape": 5.75,
+        "median_signed": 0.05
+      },
+      "Sumacpark": {
+        "homes": 114,
+        "mdape": 4.72,
+        "mape": 5.92,
+        "median_signed": 2.7
+      },
+      "Magnoliavale": {
+        "homes": 58,
+        "mdape": 4.78,
+        "mape": 6.87,
+        "median_signed": 0.75
+      }
+    },
+    "worst_communities": {
+      "Lindenglen": {
+        "homes": 62,
+        "mdape": 10.49,
+        "mape": 13.85,
+        "median_signed": 0.28
+      },
+      "Cedarhaven": {
+        "homes": 40,
+        "mdape": 10.59,
+        "mape": 12.58,
+        "median_signed": -7.72
+      },
+      "Sumacfield": {
+        "homes": 52,
+        "mdape": 11.05,
+        "mape": 12.87,
+        "median_signed": 7.16
+      },
+      "Cypressglen": {
+        "homes": 54,
+        "mdape": 12.28,
+        "mape": 17.49,
+        "median_signed": 8.52
+      },
+      "Hazelfield": {
+        "homes": 68,
+        "mdape": 13.01,
+        "mape": 15.55,
+        "median_signed": -7.67
+      }
+    },
+    "community_mdape_spread": [
+      3.39,
+      6.99,
+      13.01
+    ],
+    "range": {
+      "level": 0.8,
+      "factors": {
+        "Condo Apt": {
+          "low": -0.1256,
+          "high": 0.0993
+        },
+        "Detached": {
+          "low": -0.2197,
+          "high": 0.1298
+        },
+        "Semi-Detached": {
+          "low": -0.1958,
+          "high": 0.1545
+        },
+        "Condo Townhouse": {
+          "low": -0.1144,
+          "high": 0.107
+        },
+        "Freehold Townhouse": {
+          "low": -0.235,
+          "high": 0.0967
+        },
+        "Co-Op Apt": {
+          "low": -0.1989,
+          "high": 0.1298
+        }
+      },
+      "validation (1 month ahead)": {
+        "coverage": 0.788,
+        "median_width": 0.223
+      },
+      "Feb-May 2026 (4 months ahead)": {
+        "coverage": 0.758,
+        "median_width": 0.223
+      }
+    }
+  },
+  "list_aware": {
+    "validation": {
+      "homes": 10069.0,
+      "mdape": 3.96,
+      "mape": 5.04,
+      "median_signed": 0.83
+    },
+    "by_month": {
+      "2025-12": {
+        "homes": 1238,
+        "mdape": 3.95,
+        "mape": 4.85,
+        "median_signed": 1.45
+      },
+      "2026-01": {
+        "homes": 1058,
+        "mdape": 3.73,
+        "mape": 4.79,
+        "median_signed": 1.18
+      },
+      "2026-02": {
+        "homes": 1442,
+        "mdape": 3.88,
+        "mape": 4.98,
+        "median_signed": 0.66
+      },
+      "2026-03": {
+        "homes": 1816,
+        "mdape": 3.92,
+        "mape": 5.1,
+        "median_signed": 0.67
+      },
+      "2026-04": {
+        "homes": 2224,
+        "mdape": 4.0,
+        "mape": 5.05,
+        "median_signed": 0.91
+      },
+      "2026-05": {
+        "homes": 2291,
+        "mdape": 4.14,
+        "mape": 5.23,
+        "median_signed": 0.35
+      }
+    },
+    "backtest": {
+      "Feb-May 2026": {
+        "homes": 7773,
+        "mdape": 4.22,
+        "mape": 5.31,
+        "median_signed": 1.16
+      },
+      "Jun-Sep 2024": {
+        "homes": 7630,
+        "mdape": 4.46,
+        "mape": 5.56,
+        "median_signed": 1.21
+      },
+      "Jun-Sep 2025 (development)": {
+        "homes": 8052,
+        "mdape": 4.17,
+        "mape": 5.25,
+        "median_signed": 1.71
+      }
+    },
+    "by_type": {
+      "Co-Op Apt": {
+        "homes": 48,
+        "mdape": 5.49,
+        "mape": 6.89,
+        "median_signed": 3.42
+      },
+      "Condo Apt": {
+        "homes": 4843,
+        "mdape": 3.23,
+        "mape": 3.85,
+        "median_signed": 0.95
+      },
+      "Condo Townhouse": {
+        "homes": 616,
+        "mdape": 3.62,
+        "mape": 4.62,
+        "median_signed": 1.25
+      },
+      "Detached": {
+        "homes": 3123,
+        "mdape": 4.93,
+        "mape": 6.17,
+        "median_signed": 0.56
+      },
+      "Freehold Townhouse": {
+        "homes": 405,
+        "mdape": 5.66,
+        "mape": 6.83,
+        "median_signed": 1.34
+      },
+      "Semi-Detached": {
+        "homes": 1034,
+        "mdape": 5.63,
+        "mape": 6.64,
+        "median_signed": -0.22
+      }
+    },
+    "by_price": {
+      "under $500k": {
+        "homes": 1744,
+        "mdape": 3.48,
+        "mape": 4.23,
+        "median_signed": 2.13
+      },
+      "$500-750k": {
+        "homes": 2810,
+        "mdape": 3.3,
+        "mape": 4.1,
+        "median_signed": 1.12
+      },
+      "$750k-1M": {
+        "homes": 1884,
+        "mdape": 4.29,
+        "mape": 5.17,
+        "median_signed": 0.6
+      },
+      "$1-1.5M": {
+        "homes": 2146,
+        "mdape": 4.47,
+        "mape": 5.74,
+        "median_signed": -0.05
+      },
+      "$1.5-2.5M": {
+        "homes": 1070,
+        "mdape": 5.01,
+        "mape": 6.5,
+        "median_signed": -0.61
+      },
+      "over $2.5M": {
+        "homes": 415,
+        "mdape": 5.39,
+        "mape": 6.79,
+        "median_signed": -0.45
+      }
+    },
+    "by_sale_outcome": {
+      "far below list (<93%)": {
+        "homes": 4005,
+        "mdape": 4.59,
+        "mape": 5.37,
+        "median_signed": 4.56
+      },
+      "below list (93-97%)": {
+        "homes": 2348,
+        "mdape": 2.5,
+        "mape": 3.12,
+        "median_signed": 0.45
+      },
+      "near list (97-103%)": {
+        "homes": 2123,
+        "mdape": 3.31,
+        "mape": 3.74,
+        "median_signed": -2.23
+      },
+      "above list (103-110%)": {
+        "homes": 903,
+        "mdape": 5.99,
+        "mape": 6.02,
+        "median_signed": -5.71
+      },
+      "bidding war (>110%)": {
+        "homes": 690,
+        "mdape": 12.18,
+        "mape": 12.33,
+        "median_signed": -12.18
+      }
+    },
+    "by_time_on_market": {
+      "within a week": {
+        "homes": 1919,
+        "mdape": 4.54,
+        "mape": 5.8,
+        "median_signed": 0.88
+      },
+      "8-30 days": {
+        "homes": 4530,
+        "mdape": 4.05,
+        "mape": 5.18,
+        "median_signed": 0.96
+      },
+      "31-90 days": {
+        "homes": 2788,
+        "mdape": 3.48,
+        "mape": 4.43,
+        "median_signed": 0.46
+      },
+      "over 90 days": {
+        "homes": 832,
+        "mdape": 3.73,
+        "mape": 4.56,
+        "median_signed": 1.33
+      }
+    },
+    "best_communities": {
+      "Lindenridge": {
+        "homes": 119,
+        "mdape": 2.83,
+        "mape": 3.81,
+        "median_signed": 0.52
+      },
+      "Dogwoodbrook": {
+        "homes": 40,
+        "mdape": 2.9,
+        "mape": 4.64,
+        "median_signed": 1.03
+      },
+      "Walnutfield": {
+        "homes": 127,
+        "mdape": 2.91,
+        "mape": 3.92,
+        "median_signed": 1.21
+      },
+      "Alderworth": {
+        "homes": 54,
+        "mdape": 2.99,
+        "mape": 4.48,
+        "median_signed": 0.51
+      },
+      "Cedarheights": {
+        "homes": 65,
+        "mdape": 3.06,
+        "mape": 3.74,
+        "median_signed": 1.41
+      }
+    },
+    "worst_communities": {
+      "Beechglen": {
+        "homes": 59,
+        "mdape": 5.32,
+        "mape": 6.36,
+        "median_signed": 1.28
+      },
+      "Sycamoreview": {
+        "homes": 51,
+        "mdape": 5.38,
+        "mape": 6.62,
+        "median_signed": -0.66
+      },
+      "Sumacworth": {
+        "homes": 45,
+        "mdape": 5.43,
+        "mape": 6.02,
+        "median_signed": 2.87
+      },
+      "Magnoliabank": {
+        "homes": 43,
+        "mdape": 5.68,
+        "mape": 6.87,
+        "median_signed": -1.55
+      },
+      "Cedarhaven": {
+        "homes": 40,
+        "mdape": 5.91,
+        "mape": 6.73,
+        "median_signed": -1.18
+      }
+    },
+    "community_mdape_spread": [
+      2.83,
+      3.97,
+      5.91
+    ],
+    "range": {
+      "level": 0.8,
+      "factors": {
+        "Condo Apt": {
+          "low": -0.0719,
+          "high": 0.0536
+        },
+        "Detached": {
+          "low": -0.1055,
+          "high": 0.0715
+        },
+        "Semi-Detached": {
+          "low": -0.1128,
+          "high": 0.0998
+        },
+        "Condo Townhouse": {
+          "low": -0.0862,
+          "high": 0.0575
+        },
+        "Freehold Townhouse": {
+          "low": -0.1267,
+          "high": 0.0524
+        },
+        "Co-Op Apt": {
+          "low": -0.1001,
+          "high": 0.0332
+        }
+      },
+      "validation (1 month ahead)": {
+        "coverage": 0.795,
+        "median_width": 0.142
+      },
+      "Feb-May 2026 (4 months ahead)": {
+        "coverage": 0.779,
+        "median_width": 0.142
+      }
+    }
+  },
+  "simple_benchmark_on_validation": {
+    "mdape": 17.72,
+    "mape": 22.03
+  }
+}
